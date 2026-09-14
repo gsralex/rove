@@ -13,5 +13,5 @@ public interface Tool {
 
     String inputSchema();
 
-    String call(Map<String, Object> arguments);
+    String call(Map<String, Object> args);
 }
