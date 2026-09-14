@@ -1,6 +1,6 @@
 package com.gsralex.rove.core.loop;
 
-import com.gsralex.rove.core.common.ToolCall;
+import com.gsralex.rove.core.tool.ToolCall;
 
 public interface Listener {
 

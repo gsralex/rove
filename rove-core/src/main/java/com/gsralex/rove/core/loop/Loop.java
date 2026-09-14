@@ -1,6 +1,6 @@
 package com.gsralex.rove.core.loop;
 
-import com.gsralex.rove.core.Tool;
+import com.gsralex.rove.core.tool.Tool;
 import com.gsralex.rove.core.common.Message;
 import java.util.List;
 

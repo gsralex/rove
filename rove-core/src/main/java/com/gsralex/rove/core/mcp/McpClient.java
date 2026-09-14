@@ -1,6 +1,6 @@
 package com.gsralex.rove.core.mcp;
 
-import com.gsralex.rove.core.Tool;
+import com.gsralex.rove.core.tool.Tool;
 import java.util.List;
 import java.util.Map;
 
