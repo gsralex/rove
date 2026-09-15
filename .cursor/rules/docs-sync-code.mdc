@@ -1,0 +1,14 @@
+---
+description: Keep docs/ in sync with rove-core code
+alwaysApply: true
+---
+
+# 文档与代码同步
+
+改 `rove-core` 的公开类型、包名、API（类名、方法、钩子语义）时，必须同步更新：
+
+- `docs/agent-graph-design.md`
+- `docs/runtime.md`
+- `docs/agent-loop.md`
+
+以代码为准。不要留下已删除的名字（如 `RunContext`、`ToolCatalog`、`ToolSearchTool`、`tool_search`、`mcp_search`、`SkillSearchTool`、`MountToolTool`、`HookChain`）。`ToolRegistry` 仅 `register` / `get` / `list`，不要写成带 search。A2A 仍以 `docs/a2a.md` 存档，本版代码不做。

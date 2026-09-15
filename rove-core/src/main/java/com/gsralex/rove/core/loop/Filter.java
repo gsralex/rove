@@ -1,11 +1,12 @@
 package com.gsralex.rove.core.loop;
 
+import com.gsralex.rove.core.common.Message;
 import com.gsralex.rove.core.tool.ToolCall;
+import java.util.List;
 
-/** Runs before an action. {@code allowed == false} blocks it. */
 public interface Filter {
 
-    default FilterResult beforeRequest(String prompt) {
+    default FilterResult beforeRequest(List<Message> messages) {
         return FilterResult.allow();
     }
 

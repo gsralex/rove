@@ -1,7 +1,6 @@
 package com.gsralex.rove.core.common;
 
 import com.gsralex.rove.core.tool.ToolCall;
-
 import java.util.List;
 
 public record Message(Role role, String content, String toolCallId, List<ToolCall> toolCalls) {

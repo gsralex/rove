@@ -1,11 +1,10 @@
 package com.gsralex.rove.core.skills;
 
-/** Agent Skill (SKILL.md): name + description in frontmatter; markdown after that is body. */
-public interface Skill {
+import java.util.List;
 
-    String name();
+public record Skill(String name, String description, String body, List<String> requires) {
 
-    String description();
-
-    String body();
+    public Skill {
+        requires = requires == null ? List.of() : List.copyOf(requires);
+    }
 }

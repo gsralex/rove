@@ -1,0 +1,21 @@
+---
+description: Ask before new types; named tests only; no invented Tool/MCP search APIs
+alwaysApply: true
+---
+
+# 硬性流程约束
+
+## 加类须先征得同意
+
+**加任何类之前**必须先向用户说明：为什么要加、类名是什么；用户同意后再写。
+
+禁止擅自新增类型（含 package-private、内部类；`*Test` 里可避免的命名类型也不要加）。
+
+## 单元测试：点名才测
+
+用户明确点名某个类才加/扩测试；不要急着加测试。未点名一律不测。
+
+## 禁止发明多余类型 / search API
+
+- 不要发明 Tool/MCP 的 search 方法
+- 不要自造 `ListSkillRegistry`、`FnTool`、`LoopSession`、`*SearchTool`、`*ToolTool` 这类多余类型

@@ -1,0 +1,10 @@
+---
+description: 改完 Java 后跑 Spotless
+alwaysApply: true
+---
+
+# Spotless
+
+`mvn compile` / `mvn test` 会在 `validate` 阶段跑 `spotless:check`，未格式化即失败。
+
+改完 Java 后执行 `mvn -q spotless:apply`。本机若 `mvn` 不在 PATH，可用 IDEA 自带 Maven。临时跳过检查：`-Dspotless.check.skip=true`。
