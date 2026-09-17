@@ -72,9 +72,12 @@ public final class Main {
                         cfg.apiKey(args.get(++i));
                     } else if ("--model".equals(a) && i + 1 < args.size()) {
                         cfg.model(args.get(++i));
+                    } else if ("--stream".equals(a) && i + 1 < args.size()) {
+                        cfg.stream(Boolean.parseBoolean(args.get(++i)));
                     } else {
                         System.err.println("unknown option: " + a);
-                        System.err.println("usage: rove config set [--base-url URL] [--api-key KEY] [--model MODEL]");
+                        System.err.println(
+                                "usage: rove config set [--base-url URL] [--api-key KEY] [--model MODEL] [--stream true|false]");
                         System.exit(1);
                     }
                 }
@@ -103,6 +106,7 @@ public final class Main {
         System.out.println("baseUrl: " + cfg.baseUrl());
         System.out.println("model:   " + cfg.model());
         System.out.println("apiKey:  " + CliConfig.mask(cfg.apiKey()));
+        System.out.println("stream:  " + cfg.stream());
     }
 
     private static void chat() {
@@ -112,7 +116,8 @@ public final class Main {
                 System.err.println("本机找不到 bash（需要 macOS/Linux，或 Windows 上 PATH 中有 Git Bash/WSL）。");
                 System.exit(1);
             }
-            Agent agent = buildAgent(cfg);
+            int[] streamedChars = new int[1];
+            Agent agent = buildAgent(cfg, streamedChars);
 
             System.out.println("rove chat · model=" + cfg.model() + " · bash 已挂载");
             System.out.println("模型会自行决定是否调用 bash。");
@@ -135,7 +140,7 @@ public final class Main {
                     try {
                         interactiveConfig(in);
                         cfg = CliConfig.load();
-                        agent = buildAgent(cfg);
+                        agent = buildAgent(cfg, streamedChars);
                         cursor = agent.messages().size();
                         System.out.println("已用新配置重建会话。");
                     } catch (RuntimeException e) {
@@ -144,9 +149,14 @@ public final class Main {
                     continue;
                 }
                 try {
+                    streamedChars[0] = 0;
                     agent.run(line);
                     List<Message> messages = agent.messages();
-                    printAssistant(messages, cursor);
+                    if (streamedChars[0] > 0) {
+                        System.out.println();
+                    } else {
+                        printAssistant(messages, cursor);
+                    }
                     cursor = messages.size();
                 } catch (RuntimeException e) {
                     System.err.println("error: " + e.getMessage());
@@ -166,9 +176,9 @@ public final class Main {
         return CliConfig.load();
     }
 
-    private static Agent buildAgent(CliConfig cfg) {
+    private static Agent buildAgent(CliConfig cfg, int[] streamedChars) {
         LlmClient llm = new LlmClient(cfg.toLlmConfig());
-        AgentLoop loop = new AgentLoop(llm, 24);
+        AgentLoop loop = new AgentLoop(llm, 24).stream(cfg.stream());
         Path workspace = Path.of(loop.id()).toAbsolutePath();
         try {
             Files.createDirectories(workspace);
@@ -187,6 +197,13 @@ public final class Main {
                         用简短中文回复。""")
                 .tool(new BashTool(workspace))
                 .listener(new Listener() {
+                    @Override
+                    public void onToken(String token) {
+                        streamedChars[0] += token.length();
+                        System.out.print(token);
+                        System.out.flush();
+                    }
+
                     @Override
                     public void onToolCall(ToolCall call) {
                         System.out.printf("%n→ %s %s%n", call.name(), call.args());
@@ -229,6 +246,7 @@ public final class Main {
                     --base-url URL \\
                     --api-key KEY \\
                     --model MODEL      非交互写入
+                    --stream true|false  是否流式输出（默认 true）
                   对话中 /config|/llm  随时改配置并重建会话
                   rove help
 

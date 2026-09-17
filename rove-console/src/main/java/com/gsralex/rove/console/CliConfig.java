@@ -18,6 +18,7 @@ public final class CliConfig {
     private String baseUrl = "https://api.deepseek.com";
     private String apiKey = "";
     private String model = "deepseek-flash";
+    private boolean stream = true;
 
     public String baseUrl() {
         return baseUrl;
@@ -29,6 +30,15 @@ public final class CliConfig {
 
     public String model() {
         return model;
+    }
+
+    public boolean stream() {
+        return stream;
+    }
+
+    public CliConfig stream(boolean stream) {
+        this.stream = stream;
+        return this;
     }
 
     public boolean hasApiKey() {
@@ -80,6 +90,10 @@ public final class CliConfig {
             cfg.baseUrl(str(map.get("baseUrl")));
             cfg.apiKey(str(map.get("apiKey")));
             cfg.model(str(map.get("model")));
+            Object stream = map.get("stream");
+            if (stream instanceof Boolean b) {
+                cfg.stream(b);
+            }
         } catch (Exception e) {
             throw new RuntimeException("failed to read " + src + ": " + e.getMessage(), e);
         }
@@ -93,6 +107,7 @@ public final class CliConfig {
             map.put("baseUrl", baseUrl);
             map.put("apiKey", apiKey);
             map.put("model", model);
+            map.put("stream", stream);
             JSON.writerWithDefaultPrettyPrinter().writeValue(FILE.toFile(), map);
         } catch (Exception e) {
             throw new RuntimeException("failed to write " + FILE + ": " + e.getMessage(), e);

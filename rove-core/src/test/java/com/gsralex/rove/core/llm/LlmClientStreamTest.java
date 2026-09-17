@@ -5,9 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.gsralex.rove.core.common.Message;
 import com.gsralex.rove.core.tool.ToolCall;
 import java.io.BufferedReader;
 import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
@@ -95,6 +98,56 @@ class LlmClientStreamTest {
 
         RuntimeException e = assertThrows(RuntimeException.class, () -> read(sse, null));
         assertTrue(e.getMessage().contains("rate limit exceeded"), e.getMessage());
+    }
+
+    @Test
+    void keepsFragmentedArgumentsUntouchedInsteadOfParsingThem() throws Exception {
+        // 每个片段单独看都不是合法 JSON；流在参数中途结束（没有 finish_reason、没有 [DONE]）。
+        String sse = "data: {\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c9\","
+                + "\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\": \"}}]},\"finish_reason\":null}]}\n\n"
+                + "data: {\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,"
+                + "\"function\":{\"arguments\":\"\\\"ls -la\\\"}\"}}]},\"finish_reason\":null}]}\n\n";
+
+        LlmResp resp = read(sse, null);
+
+        // 未解析、未报错，只是把原始碎片原样攒起来交给调用方。
+        ToolCall call = resp.first().message().toolCalls().getFirst();
+        assertEquals("bash", call.name());
+        assertEquals("{\"command\": \"ls -la\"}", call.args());
+        assertEquals("tool_calls", resp.first().finishReason());
+    }
+
+    @Test
+    void bareToolCallWithoutArgumentsFallsBackToEmptyObject() throws Exception {
+        String sse = sse(
+                "{\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"list\"}}]},\"finish_reason\":null}]}");
+
+        LlmResp resp = read(sse, null);
+
+        assertEquals("{}", resp.first().message().toolCalls().getFirst().args());
+    }
+
+    @Test
+    void interfaceDefaultStubDegradesToChatAndEmitsWholeText() {
+        Llm stub = new Llm() {
+            @Override
+            public LlmResp chat(java.util.List<com.gsralex.rove.core.common.Message> messages) {
+                return LlmResp.of(new Choice(0, Message.assistant("whole"), "stop"));
+            }
+
+            @Override
+            public LlmResp chat(
+                    java.util.List<com.gsralex.rove.core.common.Message> messages,
+                    java.util.List<com.gsralex.rove.core.tool.Tool> tools) {
+                return chat(messages);
+            }
+        };
+        List<String> tokens = new ArrayList<>();
+
+        LlmResp resp = stub.stream(java.util.List.of(), null, tokens::add);
+
+        assertEquals("whole", resp.first().message().content());
+        assertEquals(List.of("whole"), tokens, "non-streaming Llm must still honour onToken");
     }
 
     private LlmResp read(String sse, Consumer<String> onToken) throws Exception {

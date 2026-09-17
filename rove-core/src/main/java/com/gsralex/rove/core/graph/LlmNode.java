@@ -20,13 +20,15 @@ public final class LlmNode implements Node {
     private final String system;
     private final String outputKey;
     private final List<Tool> tools;
+    private final boolean stream;
 
-    private LlmNode(String name, Llm llm, String system, String outputKey, List<Tool> tools) {
+    private LlmNode(String name, Llm llm, String system, String outputKey, List<Tool> tools, boolean stream) {
         this.name = name;
         this.llm = llm;
         this.system = system;
         this.outputKey = outputKey;
         this.tools = tools == null ? List.of() : List.copyOf(tools);
+        this.stream = stream;
     }
 
     public static Builder builder(String name) {
@@ -50,7 +52,9 @@ public final class LlmNode implements Node {
             state.put("error", br.reason());
             return;
         }
-        LlmResp resp = tools.isEmpty() ? client.chat(messages) : client.chat(messages, tools);
+        LlmResp resp = stream
+                ? client.stream(messages, tools, ctx::onToken)
+                : (tools.isEmpty() ? client.chat(messages) : client.chat(messages, tools));
         if (resp.isEmpty() || resp.first().message() == null) {
             log.warn("llm node {} returned no choices", name);
             state.put("error", "Model returned an empty response (network issue or timeout). Try again or rephrase.");
@@ -106,6 +110,7 @@ public final class LlmNode implements Node {
         private String system;
         private String outputKey;
         private List<Tool> tools = List.of();
+        private boolean stream;
 
         private Builder(String name) {
             this.name = name;
@@ -131,8 +136,13 @@ public final class LlmNode implements Node {
             return this;
         }
 
+        public Builder stream(boolean stream) {
+            this.stream = stream;
+            return this;
+        }
+
         public LlmNode build() {
-            return new LlmNode(name, llm, system, outputKey, tools);
+            return new LlmNode(name, llm, system, outputKey, tools, stream);
         }
     }
 }

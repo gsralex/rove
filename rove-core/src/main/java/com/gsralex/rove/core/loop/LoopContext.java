@@ -144,6 +144,12 @@ public final class LoopContext {
         }
     }
 
+    public void onToken(String token) {
+        for (Listener l : listeners) {
+            l.onToken(token);
+        }
+    }
+
     public void onToolCall(ToolCall call) {
         for (Listener l : listeners) {
             l.onToolCall(call);

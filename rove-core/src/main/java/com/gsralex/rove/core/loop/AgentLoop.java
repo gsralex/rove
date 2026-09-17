@@ -29,6 +29,7 @@ public final class AgentLoop implements Loop {
     private final Llm llm;
     private final String id;
     private final int maxSteps;
+    private boolean stream;
     private final List<Filter> filters = new ArrayList<>();
     private final List<Listener> listeners = new ArrayList<>();
 
@@ -65,6 +66,15 @@ public final class AgentLoop implements Loop {
     public AgentLoop listener(Listener listener) {
         listeners.add(listener);
         return this;
+    }
+
+    public AgentLoop stream(boolean stream) {
+        this.stream = stream;
+        return this;
+    }
+
+    public boolean stream() {
+        return stream;
     }
 
     public AgentLoop skills(SkillRegistry skills) {
@@ -150,7 +160,11 @@ public final class AgentLoop implements Loop {
             LlmResp resp;
             try {
                 onStatus("calling model");
-                resp = llm.chat(messages, List.copyOf(mounted));
+                if (stream) {
+                    resp = llm.stream(messages, List.copyOf(mounted), this::onToken);
+                } else {
+                    resp = llm.chat(messages, List.copyOf(mounted));
+                }
             } catch (RuntimeException e) {
                 log.error("llm call failed", e);
                 onError(e);
@@ -442,6 +456,12 @@ public final class AgentLoop implements Loop {
     private void onToolResult(String name, String result) {
         for (Listener l : listeners) {
             l.onToolResult(name, result);
+        }
+    }
+
+    private void onToken(String token) {
+        for (Listener l : listeners) {
+            l.onToken(token);
         }
     }
 }

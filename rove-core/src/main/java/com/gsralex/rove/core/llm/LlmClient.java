@@ -51,10 +51,7 @@ public final class LlmClient implements Llm {
         }
     }
 
-    public LlmResp stream(List<Message> messages, Consumer<String> onToken) {
-        return stream(messages, List.of(), onToken);
-    }
-
+    @Override
     public LlmResp stream(List<Message> messages, List<Tool> tools, Consumer<String> onToken) {
         try {
             HttpResponse<InputStream> resp =
