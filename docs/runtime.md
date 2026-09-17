@@ -283,11 +283,11 @@ String reply = loop.run(messages, tools);
 ```text
 detect cycle → 有环则抛错
 state = synchronizedMap(input)
-reachable = {start}
+reachable = {所有入度为 0 的节点}   // 多起点；多汇点自然结束各自路径
 completed = {}
 loop:
   ready = reachable \ completed 中「所有可达前驱已完成」的节点
-  if ready 空 → 结束（若仍有未完成可达节点 → 抛错）
+  if ready 空 → 结束（若仍有未完成可达节点 → 抛错；结果为共享 state）
   并行（|ready|>1 时经 LoopManager 虚拟线程；单个可本线程）:
     Listener.onNodeStart(name)
     if node is LlmNode:
@@ -395,7 +395,7 @@ Filter / Listener 只配在 Agent 上，执行时打进 `LoopContext`。
 | `loop.Listener` | 可观测（slf4j 打运行日志；Listener 给人看） |
 | `graph.Graph` / `Node` / `Edge` / `LlmNode` / `SkillNode` / `AgentLoopNode` / `AgentNode` | 固定编排 |
 | `llm.Llm` / `LlmClient` / `LlmResp` / `Choice` | 模型调用 |
-| `tool.Tool` / `ToolRegistry` / `ToolCall` | 用户定义工具；`ToolRegistry` 仅 `register` / `get` / `list`；元工具由 `AgentLoop` 内建（`skill_search` / `load_skill` / `mount_mcp`） |
+| `tool.Tool` / `ToolRegistry` / `ToolCall` / `BashTool` | 用户定义工具；`ToolRegistry` 仅 `register` / `get` / `list`；可选内置 `BashTool`（本机 bash）；元工具由 `AgentLoop` 内建（`skill_search` / `load_skill` / `mount_mcp`） |
 | `skills.Skill` / `SkillRegistry` / `FileSkillRegistry` | Skill 安装与查找（`list` / `find` / `install`；无 registry `search`） |
 | `mcp.McpClient` | MCP（按需 mount） |
 

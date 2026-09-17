@@ -12,7 +12,7 @@
 
     <artifactId>rove-console</artifactId>
     <name>rove-console</name>
-    <description>Rove console application</description>
+    <description>Rove CLI (chat + BashTool + local LLM config)</description>
 
     <dependencies>
         <dependency>
@@ -42,6 +42,14 @@
                             <mainClass>com.gsralex.rove.console.Main</mainClass>
                         </manifest>
                     </archive>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <mainClass>com.gsralex.rove.console.Main</mainClass>
                 </configuration>
             </plugin>
         </plugins>

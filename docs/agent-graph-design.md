@@ -38,7 +38,7 @@ flowchart TB
 ```
 
 1. **Agent**：面向用户的入口（配置 LLM、挂 Graph、Skill 安装范围、`run`）
-2. **Graph**：固定编排的 **DAG**（Node + Edge；条件在 **Edge**；匹配边 fan-out，互斥 `when` 做分支）
+2. **Graph**：固定编排的 **DAG**（Node + Edge；条件在 **Edge**；匹配边 fan-out，互斥 `when` 做分支；**多起点 / 多汇点**）
 3. **预定义 Node**：可复用积木；**一个 Node 只做一类事**
 4. **SkillRegistry**：`FileSkillRegistry` 深层 walk 找 `SKILL.md`；可选 overlay 同名覆盖
 5. **ToolRegistry**：用户已注册 Tool（`register` / `get` / `list`）；AgentLoop **启动即挂载**进本次 `tools[]`
@@ -125,7 +125,7 @@ public final class LlmClient implements Llm { /* OpenAI-compatible HTTP */ }
 
 | 类型 | 包 | 职责 |
 | --- | --- | --- |
-| `ToolRegistry` | `tool` | 用户定义 Tool 的最小容器：`register` / `get` / `list`（**无** `search`）；LLM 见已挂载 tool 的 name / schema |
+| `Tool` / `ToolRegistry` / `ToolCall` / `ToolResult` / **`BashTool`** | `tool` | 用户定义 Tool 的契约与容器；`ToolRegistry` 仅 `register` / `get` / `list`（**无** `search`）；可选内置 `BashTool`（依赖本机 `bash`：macOS/Linux，或 Windows 上 Git Bash/WSL） |
 | `Skill` / `SkillRegistry` / `FileSkillRegistry` | `skills` | `Skill` 为解析后的 `SKILL.md`（name / description / body / requires）；深层 walk；可选 overlay；`list` / `find` / `install`；LLM 侧 `skill_search` 在 `AgentLoop` 内对 `list()` 过滤 |
 | `LoopContext` | `loop` | 会话：`id`（默认 UUID）、默认 llm、Filter、Listener、Registry、Loop、MCP、`LoopManager` |
 | `LoopManager` | `loop` | 虚拟线程池；嵌套 Agent / Loop 经它调度 |
@@ -331,11 +331,11 @@ public class Edge {
 `Graph.run` 是 **DAG 调度**（非单路串行游走）：
 
 1. 运行前检测环；有环 → **抛错**
-2. 从 `start` 开始标记可达；**就绪** = 可达且所有「可达的前驱」均已完成（只等待被激活路径上的上游）
-3. 同一波多个就绪节点经 `LoopContext.loopManager()`（虚拟线程）**并行**执行，join 后再调度下游
+2. 运行时把**所有**入度为 0 的节点标为初始可达（允许多起点；不是 `Graph.start()` API）；**就绪** = 可达且所有「可达的前驱」均已完成（只等待被激活路径上的上游）
+3. 同一波多个就绪节点经 `LoopContext.loopManager()`（虚拟线程）**并行**执行，join 后再调度下游；多起点时第 0 波即可并行
 4. 节点完成后，**所有** `edge.matches(state)` 的出边都激活目标（**并行 fan-out**）
 5. **出边决策**：
-   - **没有任何出边** → 该节点为汇点，正常结束其路径
+   - **没有任何出边** → 该节点为汇点，正常结束其路径（允许多汇点；整图在可达集跑干时结束，结果为共享 `state`）
    - **有出边但都不匹配** → **抛错**（配置/状态错误）
 6. **互斥分支**：用互斥的 `Edge.when(...)`，保证同时只有一条出边匹配（订票有票/无票）
 7. **`state`**：`Collections.synchronizedMap`；并行节点应写不同 key，避免互相覆盖

@@ -19,23 +19,13 @@ public final class Graph {
 
     private final DefaultDirectedGraph<Node, Edge> graph = new DefaultDirectedGraph<>(Edge.class);
     private final List<Node> order = new ArrayList<>();
-    private Node start;
 
     public boolean addNode(Node node) {
         boolean added = graph.addVertex(node);
         if (added) {
             order.add(node);
         }
-        if (start == null) {
-            start = node;
-        }
         return added;
-    }
-
-    public Graph start(Node node) {
-        addNode(node);
-        this.start = node;
-        return this;
     }
 
     public boolean addEdge(Node from, Node to) {
@@ -56,14 +46,14 @@ public final class Graph {
             state.putAll(input);
         }
 
-        Node startNode = start != null ? start : firstSource();
-        if (startNode == null) {
+        List<Node> sources = sources();
+        if (sources.isEmpty()) {
             return state;
         }
 
         Set<Node> reachable = ConcurrentHashMap.newKeySet();
         Set<Node> completed = ConcurrentHashMap.newKeySet();
-        reachable.add(startNode);
+        reachable.addAll(sources);
 
         LoopManager loopManager = ctx.loopManager();
 
@@ -159,12 +149,13 @@ public final class Graph {
         }
     }
 
-    private Node firstSource() {
+    private List<Node> sources() {
+        List<Node> sources = new ArrayList<>();
         for (Node n : order) {
             if (graph.inDegreeOf(n) == 0) {
-                return n;
+                sources.add(n);
             }
         }
-        return order.isEmpty() ? null : order.getFirst();
+        return sources;
     }
 }

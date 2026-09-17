@@ -43,8 +43,12 @@ public final class AgentLoop implements Loop {
     }
 
     public AgentLoop(Llm llm, int maxSteps) {
+        this(llm, null, maxSteps);
+    }
+
+    public AgentLoop(Llm llm, String id, int maxSteps) {
         this.llm = llm;
-        this.id = UUID.randomUUID().toString();
+        this.id = (id == null || id.isBlank()) ? UUID.randomUUID().toString() : id;
         this.maxSteps = maxSteps;
     }
 
@@ -124,7 +128,7 @@ public final class AgentLoop implements Loop {
             }
         }
         if (messages.stream().noneMatch(m -> m.role() == Role.USER)) {
-            String msg = "需要一条用户消息才能开始。";
+            String msg = "Need a user message to start.";
             onError(new IllegalStateException(msg));
             onStatus(msg);
             return msg;
@@ -134,7 +138,7 @@ public final class AgentLoop implements Loop {
             step++;
             if (step > maxSteps) {
                 log.warn("agent loop stopped: step {} exceeded maxSteps {}", step, maxSteps);
-                String msg = "已达到步数上限，已停止自动推进。请补充说明后再试。";
+                String msg = "Step limit reached; stopped automatically. Send another message to continue.";
                 onError(new IllegalStateException(msg));
                 onStatus(msg);
                 return msg;
@@ -154,7 +158,7 @@ public final class AgentLoop implements Loop {
             }
             if (resp.isEmpty()) {
                 log.warn("llm returned no choices");
-                String msg = "模型返回空响应（可能是网络不稳或调用超时），请稍后重试或换一种说法。";
+                String msg = "Model returned an empty response (network issue or timeout). Try again or rephrase.";
                 onError(new IllegalStateException(msg));
                 return msg;
             }
@@ -166,7 +170,7 @@ public final class AgentLoop implements Loop {
                 String text = assistant.content();
                 if (text == null || text.isBlank()) {
                     log.warn("llm returned empty content and no tool_calls");
-                    String msg = "模型返回空响应（可能是网络不稳或调用超时），请稍后重试或换一种说法。";
+                    String msg = "Model returned an empty response (network issue or timeout). Try again or rephrase.";
                     onError(new IllegalStateException(msg));
                     return msg;
                 }
@@ -376,7 +380,7 @@ public final class AgentLoop implements Loop {
     }
 
     private String stopUser(String reason) {
-        String msg = reason == null || reason.isBlank() ? "操作被阻止" : reason;
+        String msg = reason == null || reason.isBlank() ? "Operation blocked" : reason;
         log.warn("stopped for user: {}", msg);
         onError(new IllegalStateException(msg));
         onStatus(msg);
@@ -384,7 +388,7 @@ public final class AgentLoop implements Loop {
     }
 
     private static String userError(String detail) {
-        return "调用失败：" + detail + "（可能是网络不稳或超时），请稍后重试。";
+        return "Call failed: " + detail + " (network issue or timeout). Try again later.";
     }
 
     private FilterResult beforeRequest(List<Message> messages) {

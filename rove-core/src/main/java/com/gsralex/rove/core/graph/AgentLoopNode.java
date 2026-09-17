@@ -122,13 +122,13 @@ public final class AgentLoopNode implements Node {
             return this;
         }
 
-        public Builder inheritMessages(boolean inherit) {
-            this.inheritMessages = inherit;
+        public Builder maxSteps(int maxSteps) {
+            this.maxSteps = maxSteps;
             return this;
         }
 
-        public Builder maxSteps(int maxSteps) {
-            this.maxSteps = maxSteps;
+        public Builder inheritMessages(boolean inherit) {
+            this.inheritMessages = inherit;
             return this;
         }
 

@@ -187,7 +187,7 @@ assistant { content: "最终回答", tool_calls: [] }
 | 层 | 是什么 | 进模型视野 |
 | --- | --- | --- |
 | **Skill** | `SKILL.md` → 具体类 `Skill`（name / description / body / requires） | `skill_search`（top-k 摘要）→ `load_skill`（正文） |
-| **Tool** | 用户定义的 bash / excel / … | **`Agent.tool` / `run` 入参启动即挂**；LLM 只见 **name + schema** |
+| **Tool** | 用户定义的业务 Tool；core 可选提供 `BashTool`（本机 bash） | **`Agent.tool` / `run` 入参启动即挂**；LLM 只见 **name + schema** |
 | **MCP** | 远端工具源 | 按配置名 `mount_mcp`；未 mount 前不进 `tools[]` |
 | **元工具** | `AgentLoop` 内建普通 `Tool` | 常驻（`skill_search` / `load_skill` / `mount_mcp`） |
 

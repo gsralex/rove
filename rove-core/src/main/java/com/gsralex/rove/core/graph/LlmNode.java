@@ -53,7 +53,7 @@ public final class LlmNode implements Node {
         LlmResp resp = tools.isEmpty() ? client.chat(messages) : client.chat(messages, tools);
         if (resp.isEmpty() || resp.first().message() == null) {
             log.warn("llm node {} returned no choices", name);
-            state.put("error", "模型返回空响应（可能是网络不稳或调用超时），请稍后重试或换一种说法。");
+            state.put("error", "Model returned an empty response (network issue or timeout). Try again or rephrase.");
             return;
         }
         Message assistant = resp.first().message();
@@ -62,7 +62,7 @@ public final class LlmNode implements Node {
         String text = assistant.content() == null ? "" : assistant.content();
         if (text.isBlank() && assistant.toolCalls().isEmpty()) {
             log.warn("llm node {} returned empty content and no tool_calls", name);
-            state.put("error", "模型返回空响应（可能是网络不稳或调用超时），请稍后重试或换一种说法。");
+            state.put("error", "Model returned an empty response (network issue or timeout). Try again or rephrase.");
             return;
         }
         FilterResult reply = ctx.beforeReply(text);
