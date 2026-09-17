@@ -121,9 +121,8 @@ public final class BashTool implements Tool {
             Process proc = p;
             feedStdin(proc, stdin);
 
-            Thread reader = Thread.ofVirtual()
-                    .name("rove-bash-reader")
-                    .unstarted(() -> drain(proc.getInputStream(), captured));
+            Thread reader =
+                    Thread.ofVirtual().name("rove-bash-reader").unstarted(() -> drain(proc.getInputStream(), captured));
             reader.start();
 
             boolean finished = p.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
@@ -133,8 +132,8 @@ public final class BashTool implements Tool {
                     closeQuietly(proc.getInputStream());
                     joinReader(reader, 500);
                 }
-                return "Error: command timed out after " + timeoutMs + "ms; process tree killed. cwd=" + cwd
-                        + "\n" + render(captured);
+                return "Error: command timed out after " + timeoutMs + "ms; process tree killed. cwd=" + cwd + "\n"
+                        + render(captured);
             }
             if (!joinReader(reader, DRAIN_GRACE_MS)) {
                 closeQuietly(proc.getInputStream());
@@ -298,8 +297,8 @@ public final class BashTool implements Tool {
             text = text.substring(0, text.length() - 1);
         }
         if (truncated) {
-            text = text + "\n…(output truncated: " + captured.total() + " bytes total, limit "
-                    + MAX_OUTPUT_CHARS + " chars)";
+            text = text + "\n…(output truncated: " + captured.total() + " bytes total, limit " + MAX_OUTPUT_CHARS
+                    + " chars)";
         }
         return text;
     }

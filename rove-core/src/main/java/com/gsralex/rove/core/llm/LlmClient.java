@@ -52,9 +52,13 @@ public final class LlmClient implements Llm {
     }
 
     public LlmResp stream(List<Message> messages, Consumer<String> onToken) {
+        return stream(messages, List.of(), onToken);
+    }
+
+    public LlmResp stream(List<Message> messages, List<Tool> tools, Consumer<String> onToken) {
         try {
             HttpResponse<InputStream> resp =
-                    http.send(req(body(messages, List.of(), true)), HttpResponse.BodyHandlers.ofInputStream());
+                    http.send(req(body(messages, tools, true)), HttpResponse.BodyHandlers.ofInputStream());
             try (BufferedReader reader =
                     new BufferedReader(new InputStreamReader(resp.body(), StandardCharsets.UTF_8))) {
                 if (resp.statusCode() != 200) {
@@ -172,28 +176,99 @@ public final class LlmClient implements Llm {
         return item;
     }
 
-    private LlmResp readStream(BufferedReader reader, Consumer<String> onToken) throws Exception {
-        StringBuilder buf = new StringBuilder();
+    LlmResp readStream(BufferedReader reader, Consumer<String> onToken) throws Exception {
+        StringBuilder content = new StringBuilder();
+        Map<Integer, ToolCallBuilder> builders = new LinkedHashMap<>();
+        String finishReason = null;
         String line;
         while ((line = reader.readLine()) != null) {
-            if (!line.startsWith("data:")) {
+            String data = sseData(line);
+            if (data == null) {
                 continue;
             }
-            String data = line.substring(5).trim();
             if ("[DONE]".equals(data)) {
                 break;
             }
-            JsonNode delta =
-                    json.readTree(data).path("choices").path(0).path("delta").path("content");
-            if (delta.isTextual()) {
-                String token = delta.asText();
-                buf.append(token);
-                if (onToken != null) {
-                    onToken.accept(token);
+            JsonNode root = json.readTree(data);
+            JsonNode error = root.path("error");
+            if (!error.isMissingNode() && !error.isNull()) {
+                throw new RuntimeException(
+                        "LLM stream error: " + error.path("message").asText(error.toString()));
+            }
+            JsonNode choices = root.path("choices");
+            if (!choices.isArray()) {
+                continue;
+            }
+            for (JsonNode choice : choices) {
+                JsonNode delta = choice.path("delta");
+                JsonNode text = delta.path("content");
+                if (text.isTextual()) {
+                    content.append(text.asText());
+                    if (onToken != null) {
+                        onToken.accept(text.asText());
+                    }
+                }
+                JsonNode toolCalls = delta.path("tool_calls");
+                if (toolCalls.isArray()) {
+                    for (JsonNode call : toolCalls) {
+                        int index = call.path("index").asInt(builders.size());
+                        builders.computeIfAbsent(index, k -> new ToolCallBuilder())
+                                .merge(call);
+                    }
+                }
+                JsonNode finish = choice.path("finish_reason");
+                if (finish.isTextual() && !finish.asText().isBlank()) {
+                    finishReason = finish.asText();
                 }
             }
         }
-        return LlmResp.of(new Choice(0, Message.assistant(buf.toString()), "stop"));
+        List<ToolCall> calls =
+                builders.values().stream().map(ToolCallBuilder::build).toList();
+        if (finishReason == null) {
+            finishReason = calls.isEmpty() ? "stop" : "tool_calls";
+        }
+        Message assistant = Message.assistant(content.isEmpty() ? null : content.toString(), calls);
+        return LlmResp.of(new Choice(0, assistant, finishReason));
+    }
+
+    private static String sseData(String line) {
+        if (line.isEmpty() || line.charAt(0) == ':' || !line.startsWith("data:")) {
+            return null;
+        }
+        String data = line.substring(5).strip();
+        return data.isEmpty() ? null : data;
+    }
+
+    private static final class ToolCallBuilder {
+
+        private String id = "";
+        private String type = "function";
+        private final StringBuilder name = new StringBuilder();
+        private final StringBuilder args = new StringBuilder();
+
+        void merge(JsonNode call) {
+            JsonNode callId = call.path("id");
+            if (id.isEmpty() && callId.isTextual()) {
+                id = callId.asText();
+            }
+            JsonNode kind = call.path("type");
+            if (kind.isTextual() && !kind.asText().isBlank()) {
+                type = kind.asText();
+            }
+            JsonNode function = call.path("function");
+            JsonNode fnName = function.path("name");
+            if (name.isEmpty() && fnName.isTextual()) {
+                name.append(fnName.asText());
+            }
+            JsonNode arguments = function.path("arguments");
+            if (arguments.isTextual()) {
+                args.append(arguments.asText());
+            }
+        }
+
+        ToolCall build() {
+            return new ToolCall(id, type, name.toString(), args.isEmpty() ? "{}" : args.toString());
+        }
     }
 
     private static String trimSlash(String url) {
