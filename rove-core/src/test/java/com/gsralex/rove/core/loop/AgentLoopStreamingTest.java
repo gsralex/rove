@@ -24,12 +24,13 @@ class AgentLoopStreamingTest {
         RecordingTool tool = new RecordingTool();
         List<String> tokens = new ArrayList<>();
 
-        AgentLoop loop = new AgentLoop(llm, 4).stream(true).listener(new Listener() {
+        LoopContext context = new LoopContext(llm).stream(true).listener(new Listener() {
             @Override
             public void onToken(String token) {
                 tokens.add(token);
             }
         });
+        AgentLoop loop = new AgentLoop(context, 4);
 
         String reply = loop.run(new ArrayList<>(List.of(Message.user("hi"))), List.of(tool));
 
@@ -46,7 +47,7 @@ class AgentLoopStreamingTest {
         RecordingLlm llm = new RecordingLlm();
         RecordingTool tool = new RecordingTool();
 
-        AgentLoop loop = new AgentLoop(llm, 4);
+        AgentLoop loop = new AgentLoop(new LoopContext(llm), 4);
         String reply = loop.run(new ArrayList<>(List.of(Message.user("hi"))), List.of(tool));
 
         assertEquals("done", reply);

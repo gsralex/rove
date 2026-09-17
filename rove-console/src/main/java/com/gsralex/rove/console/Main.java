@@ -6,6 +6,7 @@ import com.gsralex.rove.core.common.Role;
 import com.gsralex.rove.core.llm.LlmClient;
 import com.gsralex.rove.core.loop.AgentLoop;
 import com.gsralex.rove.core.loop.Listener;
+import com.gsralex.rove.core.loop.LoopContext;
 import com.gsralex.rove.core.tool.BashTool;
 import com.gsralex.rove.core.tool.ToolCall;
 import java.io.IOException;
@@ -178,8 +179,9 @@ public final class Main {
 
     private static Agent buildAgent(CliConfig cfg, int[] streamedChars) {
         LlmClient llm = new LlmClient(cfg.toLlmConfig());
-        AgentLoop loop = new AgentLoop(llm, 24).stream(cfg.stream());
-        Path workspace = Path.of(loop.id()).toAbsolutePath();
+        LoopContext context = new LoopContext(llm).stream(cfg.stream());
+        AgentLoop loop = new AgentLoop(context, 24);
+        Path workspace = Path.of(context.id()).toAbsolutePath();
         try {
             Files.createDirectories(workspace);
         } catch (IOException e) {

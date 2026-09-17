@@ -6,6 +6,8 @@ import com.gsralex.rove.core.mcp.McpClient;
 import com.gsralex.rove.core.skills.SkillRegistry;
 import com.gsralex.rove.core.tool.ToolCall;
 import com.gsralex.rove.core.tool.ToolRegistry;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -14,56 +16,21 @@ public final class LoopContext {
 
     private final String id;
     private final Llm llm;
-    private final List<Filter> filters;
-    private final List<Listener> listeners;
-    private final SkillRegistry skills;
-    private final ToolRegistry tools;
-    private final Loop loop;
-    private final Map<String, McpClient> mcp;
-    private final LoopManager loopManager;
+    private final List<Filter> filters = new ArrayList<>();
+    private final List<Listener> listeners = new ArrayList<>();
+    private final Map<String, McpClient> mcp = new LinkedHashMap<>();
+    private SkillRegistry skills;
+    private ToolRegistry tools = new ToolRegistry();
+    private LoopManager loopManager = LoopManager.shared();
+    private boolean stream;
 
-    public LoopContext(
-            Llm llm,
-            List<Filter> filters,
-            List<Listener> listeners,
-            SkillRegistry skills,
-            ToolRegistry tools,
-            Loop loop,
-            Map<String, McpClient> mcp) {
-        this(null, llm, filters, listeners, skills, tools, loop, mcp, null);
+    public LoopContext(Llm llm) {
+        this(null, llm);
     }
 
-    public LoopContext(
-            String id,
-            Llm llm,
-            List<Filter> filters,
-            List<Listener> listeners,
-            SkillRegistry skills,
-            ToolRegistry tools,
-            Loop loop,
-            Map<String, McpClient> mcp) {
-        this(id, llm, filters, listeners, skills, tools, loop, mcp, null);
-    }
-
-    public LoopContext(
-            String id,
-            Llm llm,
-            List<Filter> filters,
-            List<Listener> listeners,
-            SkillRegistry skills,
-            ToolRegistry tools,
-            Loop loop,
-            Map<String, McpClient> mcp,
-            LoopManager loopManager) {
+    public LoopContext(String id, Llm llm) {
         this.id = id == null || id.isBlank() ? UUID.randomUUID().toString() : id;
         this.llm = llm;
-        this.filters = filters == null ? List.of() : List.copyOf(filters);
-        this.listeners = listeners == null ? List.of() : List.copyOf(listeners);
-        this.skills = skills;
-        this.tools = tools == null ? new ToolRegistry() : tools;
-        this.loop = loop;
-        this.mcp = mcp == null ? Map.of() : Map.copyOf(mcp);
-        this.loopManager = loopManager == null ? LoopManager.shared() : loopManager;
     }
 
     public String id() {
@@ -75,11 +42,11 @@ public final class LoopContext {
     }
 
     public List<Filter> filters() {
-        return filters;
+        return List.copyOf(filters);
     }
 
     public List<Listener> listeners() {
-        return listeners;
+        return List.copyOf(listeners);
     }
 
     public SkillRegistry skills() {
@@ -90,16 +57,78 @@ public final class LoopContext {
         return tools;
     }
 
-    public Loop loop() {
-        return loop;
-    }
-
     public Map<String, McpClient> mcp() {
-        return mcp;
+        return Map.copyOf(mcp);
     }
 
     public LoopManager loopManager() {
         return loopManager;
+    }
+
+    public boolean stream() {
+        return stream;
+    }
+
+    public LoopContext filter(Filter filter) {
+        if (filter != null) {
+            filters.add(filter);
+        }
+        return this;
+    }
+
+    public LoopContext filters(List<Filter> more) {
+        if (more != null) {
+            filters.addAll(more);
+        }
+        return this;
+    }
+
+    public LoopContext listener(Listener listener) {
+        if (listener != null) {
+            listeners.add(listener);
+        }
+        return this;
+    }
+
+    public LoopContext listeners(List<Listener> more) {
+        if (more != null) {
+            listeners.addAll(more);
+        }
+        return this;
+    }
+
+    public LoopContext skills(SkillRegistry skills) {
+        this.skills = skills;
+        return this;
+    }
+
+    public LoopContext tools(ToolRegistry tools) {
+        this.tools = tools == null ? new ToolRegistry() : tools;
+        return this;
+    }
+
+    public LoopContext mcp(String name, McpClient client) {
+        if (name != null && client != null) {
+            mcp.put(name, client);
+        }
+        return this;
+    }
+
+    public LoopContext mcp(Map<String, McpClient> more) {
+        if (more != null) {
+            mcp.putAll(more);
+        }
+        return this;
+    }
+
+    public LoopContext loopManager(LoopManager loopManager) {
+        this.loopManager = loopManager == null ? LoopManager.shared() : loopManager;
+        return this;
+    }
+
+    public LoopContext stream(boolean stream) {
+        this.stream = stream;
+        return this;
     }
 
     public FilterResult beforeRequest(List<Message> messages) {

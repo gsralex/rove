@@ -8,7 +8,6 @@ import com.gsralex.rove.core.llm.Llm;
 import com.gsralex.rove.core.loop.AgentLoop;
 import com.gsralex.rove.core.loop.Filter;
 import com.gsralex.rove.core.loop.Listener;
-import com.gsralex.rove.core.loop.Loop;
 import com.gsralex.rove.core.loop.LoopContext;
 import com.gsralex.rove.core.loop.LoopManager;
 import com.gsralex.rove.core.mcp.McpClient;
@@ -29,13 +28,11 @@ public final class Agent {
     private final String name;
     private final Llm llm;
     private final Graph graph;
-    private final Loop loop;
+    private final AgentLoop loop;
+    private final LoopContext context;
     private final LoopManager loopManager;
     private final SkillRegistry skills;
     private final ToolRegistry toolRegistry;
-    private final Map<String, McpClient> mcp;
-    private final List<Filter> filters;
-    private final List<Listener> listeners;
     private final String system;
     private final List<Message> messages = new ArrayList<>();
 
@@ -45,25 +42,17 @@ public final class Agent {
         this.graph = b.graph;
         this.skills = b.skills;
         this.toolRegistry = b.toolRegistry;
-        this.mcp = Map.copyOf(b.mcp);
-        this.filters = List.copyOf(b.filters);
-        this.listeners = List.copyOf(b.listeners);
         this.system = b.system;
         this.loopManager = b.loopManager == null ? LoopManager.shared() : b.loopManager;
-        AgentLoop built = b.loop != null
-                ? copyLoop(b.loop)
-                : new AgentLoop(b.llm, b.maxSteps)
-                        .filters(b.filters)
-                        .listeners(b.listeners)
-                        .skills(b.skills)
-                        .toolRegistry(b.toolRegistry);
-        mcp.forEach(built::mcp);
-        this.loop = built;
-    }
-
-    private static AgentLoop copyLoop(Loop loop) {
-        Preconditions.checkArgument(loop instanceof AgentLoop, "loop must be AgentLoop");
-        return (AgentLoop) loop;
+        LoopContext ctx = b.loop != null ? b.loop.context() : new LoopContext(b.llm);
+        ctx.filters(b.filters)
+                .listeners(b.listeners)
+                .skills(b.skills)
+                .tools(b.toolRegistry)
+                .mcp(b.mcp)
+                .loopManager(loopManager);
+        this.loop = b.loop != null ? b.loop : new AgentLoop(ctx, b.maxSteps);
+        this.context = this.loop.context();
     }
 
     public static Builder builder() {
@@ -92,6 +81,10 @@ public final class Agent {
 
     public LoopManager loopManager() {
         return loopManager;
+    }
+
+    public LoopContext context() {
+        return context;
     }
 
     public Skill installSkill(Path skillMd) {
@@ -140,9 +133,7 @@ public final class Agent {
 
     private Map<String, Object> runGraph(Map<String, Object> input) {
         Map<String, Object> state = new HashMap<>(input);
-        LoopContext ctx =
-                new LoopContext(loop.id(), llm, filters, listeners, skills, toolRegistry, loop, mcp, loopManager);
-        Map<String, Object> result = graph.run(state, ctx);
+        Map<String, Object> result = graph.run(state, context);
         Object ms = result.get("messages");
         if (ms instanceof List<?> list) {
             messages.clear();
@@ -262,10 +253,6 @@ public final class Agent {
 
         public Agent build() {
             Preconditions.checkNotNull(llm, "llm is required");
-            if (loop != null) {
-                loop.filters(filters).listeners(listeners).skills(skills).toolRegistry(toolRegistry);
-                mcp.forEach(loop::mcp);
-            }
             return new Agent(this);
         }
     }

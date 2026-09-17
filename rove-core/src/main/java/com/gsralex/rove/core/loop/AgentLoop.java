@@ -5,20 +5,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsralex.rove.core.common.Message;
 import com.gsralex.rove.core.common.Role;
 import com.gsralex.rove.core.llm.Choice;
-import com.gsralex.rove.core.llm.Llm;
 import com.gsralex.rove.core.llm.LlmResp;
 import com.gsralex.rove.core.mcp.McpClient;
 import com.gsralex.rove.core.skills.Skill;
-import com.gsralex.rove.core.skills.SkillRegistry;
 import com.gsralex.rove.core.tool.Tool;
 import com.gsralex.rove.core.tool.ToolCall;
-import com.gsralex.rove.core.tool.ToolRegistry;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -26,84 +23,26 @@ public final class AgentLoop implements Loop {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    private final Llm llm;
-    private final String id;
+    private final LoopContext context;
     private final int maxSteps;
-    private boolean stream;
-    private final List<Filter> filters = new ArrayList<>();
-    private final List<Listener> listeners = new ArrayList<>();
-
-    SkillRegistry skills;
-
-    ToolRegistry toolRegistry = new ToolRegistry();
-    final Map<String, McpClient> mcp = new LinkedHashMap<>();
     final List<Tool> mounted = new ArrayList<>();
 
-    public AgentLoop(Llm llm) {
-        this(llm, 20);
+    public AgentLoop(LoopContext context) {
+        this(context, 50);
     }
 
-    public AgentLoop(Llm llm, int maxSteps) {
-        this(llm, null, maxSteps);
-    }
-
-    public AgentLoop(Llm llm, String id, int maxSteps) {
-        this.llm = llm;
-        this.id = (id == null || id.isBlank()) ? UUID.randomUUID().toString() : id;
+    public AgentLoop(LoopContext context, int maxSteps) {
+        this.context = Objects.requireNonNull(context, "context is required");
         this.maxSteps = maxSteps;
     }
 
     @Override
     public String id() {
-        return id;
+        return context.id();
     }
 
-    public AgentLoop filter(Filter filter) {
-        filters.add(filter);
-        return this;
-    }
-
-    public AgentLoop listener(Listener listener) {
-        listeners.add(listener);
-        return this;
-    }
-
-    public AgentLoop stream(boolean stream) {
-        this.stream = stream;
-        return this;
-    }
-
-    public boolean stream() {
-        return stream;
-    }
-
-    public AgentLoop skills(SkillRegistry skills) {
-        this.skills = skills;
-        return this;
-    }
-
-    public AgentLoop toolRegistry(ToolRegistry toolRegistry) {
-        this.toolRegistry = toolRegistry;
-        return this;
-    }
-
-    public AgentLoop mcp(String name, McpClient client) {
-        this.mcp.put(name, client);
-        return this;
-    }
-
-    public AgentLoop filters(List<Filter> more) {
-        if (more != null) {
-            filters.addAll(more);
-        }
-        return this;
-    }
-
-    public AgentLoop listeners(List<Listener> more) {
-        if (more != null) {
-            listeners.addAll(more);
-        }
-        return this;
+    public LoopContext context() {
+        return context;
     }
 
     void mount(Tool tool) {
@@ -112,7 +51,7 @@ public final class AgentLoop implements Loop {
         }
         mounted.removeIf(t -> t.name().equals(tool.name()));
         mounted.add(tool);
-        toolRegistry.register(tool);
+        context.tools().register(tool);
     }
 
     Tool findMounted(String name) {
@@ -139,8 +78,8 @@ public final class AgentLoop implements Loop {
         }
         if (messages.stream().noneMatch(m -> m.role() == Role.USER)) {
             String msg = "Need a user message to start.";
-            onError(new IllegalStateException(msg));
-            onStatus(msg);
+            context.onError(new IllegalStateException(msg));
+            context.onStatus(msg);
             return msg;
         }
         int step = 0;
@@ -149,31 +88,31 @@ public final class AgentLoop implements Loop {
             if (step > maxSteps) {
                 log.warn("agent loop stopped: step {} exceeded maxSteps {}", step, maxSteps);
                 String msg = "Step limit reached; stopped automatically. Send another message to continue.";
-                onError(new IllegalStateException(msg));
-                onStatus(msg);
+                context.onError(new IllegalStateException(msg));
+                context.onStatus(msg);
                 return msg;
             }
-            FilterResult br = beforeRequest(messages);
+            FilterResult br = context.beforeRequest(messages);
             if (!br.allowed()) {
                 return stopUser(br.reason());
             }
             LlmResp resp;
             try {
-                onStatus("calling model");
-                if (stream) {
-                    resp = llm.stream(messages, List.copyOf(mounted), this::onToken);
+                context.onStatus("calling model");
+                if (context.stream()) {
+                    resp = context.llm().stream(messages, List.copyOf(mounted), context::onToken);
                 } else {
-                    resp = llm.chat(messages, List.copyOf(mounted));
+                    resp = context.llm().chat(messages, List.copyOf(mounted));
                 }
             } catch (RuntimeException e) {
                 log.error("llm call failed", e);
-                onError(e);
+                context.onError(e);
                 return userError(e.getMessage() == null ? e.toString() : e.getMessage());
             }
             if (resp.isEmpty()) {
                 log.warn("llm returned no choices");
                 String msg = "Model returned an empty response (network issue or timeout). Try again or rephrase.";
-                onError(new IllegalStateException(msg));
+                context.onError(new IllegalStateException(msg));
                 return msg;
             }
             Choice choice = resp.first();
@@ -185,32 +124,32 @@ public final class AgentLoop implements Loop {
                 if (text == null || text.isBlank()) {
                     log.warn("llm returned empty content and no tool_calls");
                     String msg = "Model returned an empty response (network issue or timeout). Try again or rephrase.";
-                    onError(new IllegalStateException(msg));
+                    context.onError(new IllegalStateException(msg));
                     return msg;
                 }
-                FilterResult reply = beforeReply(text);
+                FilterResult reply = context.beforeReply(text);
                 if (!reply.allowed()) {
                     return stopUser(reply.reason());
                 }
                 return text;
             }
             for (ToolCall call : calls) {
-                FilterResult bt = beforeTool(call);
+                FilterResult bt = context.beforeTool(call);
                 if (!bt.allowed()) {
                     messages.add(Message.tool(call.id(), "Error: " + bt.reason()));
                     return stopUser(bt.reason());
                 }
-                onToolCall(call);
-                onStatus("tool " + call.name());
+                context.onToolCall(call);
+                context.onStatus("tool " + call.name());
                 String result;
                 try {
                     result = invoke(call);
                 } catch (RuntimeException e) {
                     log.error("tool {} failed", call.name(), e);
-                    onError(e);
+                    context.onError(e);
                     return userError(e.getMessage() == null ? e.toString() : e.getMessage());
                 }
-                onToolResult(call.name(), result);
+                context.onToolResult(call.name(), result);
                 messages.add(Message.tool(call.id(), result));
             }
         }
@@ -277,11 +216,11 @@ public final class AgentLoop implements Loop {
     }
 
     private List<Skill> shortlistSkills(String query, int k) {
-        if (skills == null || query == null || query.isBlank() || k <= 0) {
+        if (context.skills() == null || query == null || query.isBlank() || k <= 0) {
             return List.of();
         }
         String q = query.toLowerCase(Locale.ROOT);
-        return skills.list().stream()
+        return context.skills().list().stream()
                 .filter(s -> containsIgnoreCase(s.name(), q) || containsIgnoreCase(s.description(), q))
                 .limit(k)
                 .toList();
@@ -312,14 +251,16 @@ public final class AgentLoop implements Loop {
             public String call(Map<String, Object> args) {
                 Object raw = args == null ? null : args.get("name");
                 String name = raw == null ? "" : String.valueOf(raw);
-                Skill skill = skills == null ? null : skills.find(name).orElse(null);
+                Skill skill = context.skills() == null
+                        ? null
+                        : context.skills().find(name).orElse(null);
                 if (skill == null) {
                     return "Error: unknown skill " + name;
                 }
                 List<String> ok = new ArrayList<>();
                 List<String> missing = new ArrayList<>();
                 for (String req : skill.requires()) {
-                    toolRegistry
+                    context.tools()
                             .get(req)
                             .ifPresentOrElse(
                                     t -> {
@@ -363,7 +304,7 @@ public final class AgentLoop implements Loop {
             public String call(Map<String, Object> args) {
                 Object raw = args == null ? null : args.get("name");
                 String name = raw == null ? "" : String.valueOf(raw);
-                McpClient client = mcp.get(name);
+                McpClient client = context.mcp().get(name);
                 if (client == null) {
                     return "Error: unknown MCP server " + name;
                 }
@@ -396,72 +337,12 @@ public final class AgentLoop implements Loop {
     private String stopUser(String reason) {
         String msg = reason == null || reason.isBlank() ? "Operation blocked" : reason;
         log.warn("stopped for user: {}", msg);
-        onError(new IllegalStateException(msg));
-        onStatus(msg);
+        context.onError(new IllegalStateException(msg));
+        context.onStatus(msg);
         return msg;
     }
 
     private static String userError(String detail) {
         return "Call failed: " + detail + " (network issue or timeout). Try again later.";
-    }
-
-    private FilterResult beforeRequest(List<Message> messages) {
-        for (Filter f : filters) {
-            FilterResult r = f.beforeRequest(messages);
-            if (!r.allowed()) {
-                return r;
-            }
-        }
-        return FilterResult.allow();
-    }
-
-    private FilterResult beforeTool(ToolCall call) {
-        for (Filter f : filters) {
-            FilterResult r = f.beforeTool(call);
-            if (!r.allowed()) {
-                return r;
-            }
-        }
-        return FilterResult.allow();
-    }
-
-    private FilterResult beforeReply(String reply) {
-        for (Filter f : filters) {
-            FilterResult r = f.beforeReply(reply);
-            if (!r.allowed()) {
-                return r;
-            }
-        }
-        return FilterResult.allow();
-    }
-
-    private void onError(Throwable error) {
-        for (Listener l : listeners) {
-            l.onError(error);
-        }
-    }
-
-    private void onStatus(String status) {
-        for (Listener l : listeners) {
-            l.onStatus(status);
-        }
-    }
-
-    private void onToolCall(ToolCall call) {
-        for (Listener l : listeners) {
-            l.onToolCall(call);
-        }
-    }
-
-    private void onToolResult(String name, String result) {
-        for (Listener l : listeners) {
-            l.onToolResult(name, result);
-        }
-    }
-
-    private void onToken(String token) {
-        for (Listener l : listeners) {
-            l.onToken(token);
-        }
     }
 }

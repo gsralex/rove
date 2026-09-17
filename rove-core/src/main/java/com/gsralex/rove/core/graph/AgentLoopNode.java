@@ -49,7 +49,7 @@ public final class AgentLoopNode implements Node {
             local.addAll(LlmNode.messagesOf(state));
         }
         if (system != null) {
-            local.add(0, Message.system(system));
+            local.addFirst(Message.system(system));
         }
         Object input = inputKey == null ? null : state.get(inputKey);
         if (input != null) {
@@ -64,13 +64,7 @@ public final class AgentLoopNode implements Node {
     }
 
     private Loop buildLoop(LoopContext ctx) {
-        AgentLoop built = new AgentLoop(ctx.llm(), maxSteps <= 0 ? 20 : maxSteps)
-                .filters(ctx.filters())
-                .listeners(ctx.listeners())
-                .skills(ctx.skills())
-                .toolRegistry(ctx.tools());
-        ctx.mcp().forEach(built::mcp);
-        return built;
+        return new AgentLoop(ctx, maxSteps <= 0 ? 20 : maxSteps);
     }
 
     @Override
